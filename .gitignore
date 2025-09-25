@@ -1,0 +1,17 @@
+artifacts/
+deployments/
+node_modules/
+package-lock.json
+cache/
+curl/
+pancake/
+test/
+.envrc
+.secret*
+contracts/.deps/
+contracts/.states/
+contracts/.workspaces/
+contracts/compiler_config.json
+.cross*
+.states
+compiler_config.json
