@@ -1,10 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useAccount, useReadContract } from 'wagmi'
+import { useTokenApprove } from '@/hooks/useTokenApprove'
+import { CONTRACTS } from '@/lib/constants/contracts'
+import ERC20ABI from '@/lib/abis/ERC20ABI.json'
+import { useSwap } from '@/hooks/useSwap'
 
 export default function SwapPage() {
-  const [fromToken, setFromToken] = useState('ETH')
-  const [toToken, setToToken] = useState('USDT')
+  const { address, isConnected } = useAccount()
+  const [fromToken, setFromToken] = useState('USDT')
+  const [toToken, setToToken] = useState('USDC')
   const [fromAmount, setFromAmount] = useState('')
   const [toAmount, setToAmount] = useState('')
 
@@ -16,6 +22,46 @@ export default function SwapPage() {
     setFromAmount(toAmount)
     setToAmount(fromAmount)
   }
+
+  const { approve, isPending, isConfirming, isSuccess } = useTokenApprove()
+  // 检查授权额度
+  const { data: allowance } = useReadContract({
+    address: CONTRACTS[fromToken],
+    abi: ERC20ABI,
+    functionName: 'allowance',
+    args: address ? [address, CONTRACTS.SWAP_ROUTER] : undefined,
+    enabled: !!address,
+  })
+
+  const handleApprove = async () => {
+    if (!fromAmount) return
+
+    try {
+      await approve(
+        CONTRACTS[fromToken],
+        CONTRACTS.SWAP_ROUTER,
+        fromAmount,
+        18 // decimals
+      )
+    } catch (err) {
+      alert('Approval failed: ' + err.message)
+    }
+  }
+  const { swap, isPending: swapPending, isConfirming: swapConfirming, isSuccess: swapSuccess } = useSwap()
+
+  const handleSwap = async () => {
+    if (!fromAmount) return
+  
+    try {
+      await swap(fromToken, toToken, fromAmount, 0.5) // 0.5% slippage
+      alert('Swap successful!')
+    } catch (err) {
+      alert('Swap failed: ' + err.message)
+    }
+  }
+
+  const needsApproval = allowance ? BigInt(allowance) < BigInt(fromAmount || 0) : true
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 py-12 px-4">
@@ -112,10 +158,38 @@ export default function SwapPage() {
             </div>
           </div>
 
-          {/* Swap 按钮 */}
+          {/* Swap 按钮
           <button className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-4 rounded-xl transition-all shadow-lg hover:shadow-purple-500/50">
             Connect Wallet to Swap
-          </button>
+          </button> */}
+          {/* 按钮逻辑 */}
+          {!isConnected ? (
+            <button className="w-full bg-gray-600 text-white font-semibold py-4 rounded-xl cursor-not-allowed">
+              Please Connect Wallet
+            </button>
+          ) : needsApproval ? (
+            <button
+              onClick={handleApprove}
+              disabled={isPending || isConfirming}
+              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold py-4 rounded-xl transition-all shadow-lg disabled:opacity-50"
+            >
+              {isPending ? 'Approving...' : isConfirming ? 'Confirming...' : 'Approve ' + fromToken}
+            </button>
+          ) : (
+            <button
+              onClick={handleSwap}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold py-4 rounded-xl transition-all shadow-lg"
+            >
+              Swap
+            </button>
+          )}
+
+          {/* 成功提示 */}
+          {isSuccess && (
+            <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-4 text-center">
+              <div className="text-green-400 font-semibold">✓ Approval Successful!</div>
+            </div>
+          )}
         </div>
       </div>
     </div>
